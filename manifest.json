@@ -1,0 +1,14 @@
+{
+  "name": "快乐学历史",
+  "short_name": "学历史",
+  "description": "国风水墨历史语音问答小程序，每天5道题轻松学历史",
+  "start_url": "/happy-history/",
+  "display": "standalone",
+  "background_color": "#F5F0E8",
+  "theme_color": "#C0392B",
+  "orientation": "portrait",
+  "icons": [
+    {"src": "assets/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml"},
+    {"src": "assets/icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml"}
+  ]
+}

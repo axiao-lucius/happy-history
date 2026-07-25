@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#F5F0E8">
+  <meta name="description" content="Happy History — 趣味历史答题，品味千年风华">
+  <title>趣史 Happy History</title>
+
+  <!-- Google Fonts: Noto Serif SC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Design System -->
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+  <!-- ===== Header ===== -->
+  <header class="app-header">
+    <div class="logo">📜</div>
+    <h1>趣史 · Happy History</h1>
+  </header>
+
+  <!-- ===== Main Content (Route Container) ===== -->
+  <main class="container">
+
+    <!-- Home Page -->
+    <div data-page="home" class="active">
+      <div class="card mt-md">
+        <h2 class="card-title">今日一问</h2>
+        <p>「以铜为镜，可以正衣冠；以史为镜，可以知兴替。」</p>
+        <p class="text-center text-vermilion" style="font-size:var(--fs-sm);">—— 唐·李世民</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">快速开始</h2>
+        <p>选择朝代，开启你的历史之旅。</p>
+        <button class="btn btn-primary btn-block mt-md" onclick="switchPage('quiz')">开始答题 🖊️</button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">我的成就</h2>
+        <div class="stat-grid">
+          <div><div class="stat-value">--</div><div class="stat-label">总答题</div></div>
+          <div><div class="stat-value">--</div><div class="stat-label">正确率</div></div>
+          <div><div class="stat-value">--</div><div class="stat-label">最高连击</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiz Page -->
+    <div data-page="quiz">
+      <div class="card mt-md">
+        <div class="quiz-progress"><div class="quiz-progress-bar" style="width:0%"></div></div>
+        <div class="quiz-question">题目加载中…</div>
+        <div class="quiz-options">
+          <div class="quiz-option">A. 选项一</div>
+          <div class="quiz-option">B. 选项二</div>
+          <div class="quiz-option">C. 选项三</div>
+          <div class="quiz-option">D. 选项四</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rank Page -->
+    <div data-page="rank">
+      <div class="card mt-md text-center">
+        <div class="rank-badge">🏅</div>
+        <h2>当前段位</h2>
+        <p class="text-gold" style="font-size:var(--fs-lg);font-weight:700;">童生</p>
+        <p style="font-size:var(--fs-sm);color:rgba(44,44,44,0.5);">再答对 30 题晋升秀才</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">段位一览</h2>
+        <ul class="rank-list">
+          <li class="rank-item"><span>🥉 童生</span><span class="text-gold">0 – 99</span></li>
+          <li class="rank-item"><span>🥈 秀才</span><span class="text-gold">100 – 299</span></li>
+          <li class="rank-item"><span>🥇 举人</span><span class="text-gold">300 – 599</span></li>
+          <li class="rank-item"><span>🎖️ 进士</span><span class="text-gold">600 – 999</span></li>
+          <li class="rank-item"><span>👑 状元</span><span class="text-gold">1000+</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Profile Page -->
+    <div data-page="profile">
+      <div class="card mt-md text-center">
+        <div class="profile-avatar" style="background:var(--color-border);display:flex;align-items:center;justify-content:center;font-size:2rem;">🧑‍🎓</div>
+        <h2>书卷少年</h2>
+        <p class="text-indigo" style="font-size:var(--fs-sm);">童生 · 积分 42</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">学习统计</h2>
+        <div class="stat-grid">
+          <div><div class="stat-value">7</div><div class="stat-label">连续天数</div></div>
+          <div><div class="stat-value">128</div><div class="stat-label">已答题数</div></div>
+          <div><div class="stat-value">82%</div><div class="stat-label">正确率</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">设置</h2>
+        <div class="quiz-option">🔔 每日提醒</div>
+        <div class="quiz-option">🌙 深色模式（开发中）</div>
+        <div class="quiz-option">📤 分享成绩</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===== Footer ===== -->
+  <footer class="app-footer">
+    <p>© 2024 趣史 Happy History · 以史为鉴，趣味无穷</p>
+  </footer>
+
+  <!-- ===== Bottom Navigation ===== -->
+  <nav class="bottom-nav">
+    <button class="nav-tab active" data-target="home">
+      <span class="nav-icon">🏠</span>
+      <span>首页</span>
+    </button>
+    <button class="nav-tab" data-target="quiz">
+      <span class="nav-icon">🖊️</span>
+      <span>答题</span>
+    </button>
+    <button class="nav-tab" data-target="rank">
+      <span class="nav-icon">🏅</span>
+      <span>段位</span>
+    </button>
+    <button class="nav-tab" data-target="profile">
+      <span class="nav-icon">👤</span>
+      <span>我的</span>
+    </button>
+  </nav>
+
+  <!-- ===== Core Modules (load order matters) ===== -->
+  <script src="js/quizEngine.js"></script>
+  <script src="js/adaptiveSystem.js"></script>
+  <script src="js/stateManager.js"></script>
+  <script src="js/voiceEngine.js"></script>
+  <script src="js/scoringSystem.js"></script>
+  <!-- UI Components -->
+  <script src="js/components/QuizCard.js"></script>
+  <script src="js/components/RankReveal.js"></script>
+  <script src="js/components/StreakCounter.js"></script>
+  <!-- App Entry -->
+  <script src="js/app.js"></script>
+  
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
