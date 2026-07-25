@@ -125,8 +125,8 @@
       return [];
     }
 
-    var minD = difficultyRange && difficultyRange.min ? parseInt(difficultyRange.min.replace('D', ''), 10) : 1;
-    var maxD = difficultyRange && difficultyRange.max ? parseInt(difficultyRange.max.replace('D', ''), 10) : 5;
+    var minD = difficultyRange && difficultyRange.min != null ? (typeof difficultyRange.min === 'number' ? difficultyRange.min : parseInt(String(difficultyRange.min).replace('D', ''), 10)) : 1;
+    var maxD = difficultyRange && difficultyRange.max != null ? (typeof difficultyRange.max === 'number' ? difficultyRange.max : parseInt(String(difficultyRange.max).replace('D', ''), 10)) : 5;
 
     var excludeSet = {};
     if (excludeIds && Array.isArray(excludeIds)) {
@@ -139,7 +139,8 @@
     var candidates = [];
     for (var i = 0; i < _allQuestions.length; i++) {
       var q = _allQuestions[i];
-      var dLevel = parseInt((q.difficulty || 'D1').replace('D', ''), 10);
+      var rawD = q.difficulty;
+      var dLevel = (typeof rawD === 'number') ? rawD : parseInt((rawD || 'D1').replace('D', ''), 10);
       if (dLevel >= minD && dLevel <= maxD) {
         if (!excludeSet[q.id]) {
           candidates.push(q);
@@ -191,7 +192,8 @@
 
     var d1Questions = [];
     for (var i = 0; i < _allQuestions.length; i++) {
-      if (_allQuestions[i].difficulty === 'D1') {
+      var d = _allQuestions[i].difficulty;
+      if (d === 'D1' || d === 1) {
         d1Questions.push(_allQuestions[i]);
       }
     }
