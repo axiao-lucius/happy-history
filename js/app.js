@@ -45,6 +45,8 @@
     voiceSupported: false
   };
 
+  var _quizDataReady = null; // Promise for quiz data loading
+
   // ==================== 工具函数 ====================
 
   function safeCall(namespace, method) {
@@ -170,6 +172,17 @@
   // ==================== 答题流程(quiz) ====================
 
   function startRound() {
+    // 确保题库已加载
+    if (_quizDataReady) {
+      _quizDataReady.then(function() {
+        _doStartRound();
+      });
+    } else {
+      _doStartRound();
+    }
+  }
+
+  function _doStartRound() {
     _state.roundQuestions = [];
     _state.currentQuestionIndex = 0;
     _state.roundCorrectCount = 0;
@@ -732,7 +745,7 @@
     console.log('[App] Initializing...');
 
     // 加载题库
-    QuizEngine.loadQuizData()
+    _quizDataReady = QuizEngine.loadQuizData()
       .then(function () {
         console.log('[App] Quiz data loaded.');
       })
