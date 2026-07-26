@@ -1,4 +1,4 @@
-const CACHE_NAME = 'happy-history-v1';
+const CACHE_NAME = 'happy-history-v2';
 const ASSETS_TO_CACHE = [
   '/happy-history/',
   '/happy-history/index.html',
