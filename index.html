@@ -153,15 +153,6 @@
   <!-- App Entry -->
   <script src="js/app.js"></script>
   
-  <!-- PWA Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('SW registered:', reg.scope))
-          .catch(err => console.warn('SW registration failed:', err));
-      });
-    }
-  </script>
+  <!-- PWA Service Worker (disabled for stability) -->
 </body>
 </html>
