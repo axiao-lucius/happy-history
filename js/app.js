@@ -172,57 +172,94 @@
   // ==================== 答题流程(quiz) ====================
 
   function startRound() {
+    // 显示加载状态
+    var container = $('#quiz-card-container');
+    if (container) {
+      container.innerHTML = '<div class="quiz-loading" style="text-align:center;padding:40px 20px;">' +
+        '<div style="font-size:2rem;margin-bottom:16px;">📜</div>' +
+        '<div style="color:#666;font-size:14px;">题目加载中...</div></div>';
+    }
+
     // 确保题库已加载
     if (_quizDataReady) {
       _quizDataReady.then(function() {
         _doStartRound();
+      }).catch(function(err) {
+        console.error('[App] Quiz data load failed:', err);
+        showQuizError('题库加载失败，请检查网络后刷新页面重试。');
       });
     } else {
-      _doStartRound();
+      // 如果_quizDataReady未设置，尝试重新加载
+      QuizEngine.loadQuizData().then(function() {
+        _doStartRound();
+      }).catch(function(err) {
+        console.error('[App] Quiz data reload failed:', err);
+        showQuizError('题库加载失败，请检查网络后刷新页面重试。');
+      });
     }
   }
 
   function _doStartRound() {
-    _state.roundQuestions = [];
-    _state.currentQuestionIndex = 0;
-    _state.roundCorrectCount = 0;
-    _state.isRoundActive = true;
-    _state.waitingForConfirm = false;
+    try {
+      _state.roundQuestions = [];
+      _state.currentQuestionIndex = 0;
+      _state.roundCorrectCount = 0;
+      _state.isRoundActive = true;
+      _state.waitingForConfirm = false;
 
-    var adaptiveState = AdaptiveSystem.getState();
-    var batchConfig = AdaptiveSystem.getNextBatch(adaptiveState);
-    var isFirstQuestionToday = !adaptiveState.today_answered_ids || adaptiveState.today_answered_ids.length === 0;
-    var excludeIds = (adaptiveState.today_answered_ids || []).slice();
-    var questions = [];
+      var adaptiveState = AdaptiveSystem.getState();
+      var batchConfig = AdaptiveSystem.getNextBatch(adaptiveState);
+      var isFirstQuestionToday = !adaptiveState.today_answered_ids || adaptiveState.today_answered_ids.length === 0;
+      var excludeIds = (adaptiveState.today_answered_ids || []).slice();
+      var questions = [];
 
-    for (var i = 0; i < batchConfig.length; i++) {
-      var config = batchConfig[i];
-      var q = null;
+      for (var i = 0; i < batchConfig.length; i++) {
+        var config = batchConfig[i];
+        var q = null;
 
-      if (i === 0 && isFirstQuestionToday) {
-        q = QuizEngine.getDailyFirstQuestion();
+        if (i === 0 && isFirstQuestionToday) {
+          try { q = QuizEngine.getDailyFirstQuestion(); } catch(e) { console.warn('[App] getDailyFirstQuestion error:', e); }
+        }
+
+        if (!q) {
+          try {
+            // 确保difficulty参数为字符串格式
+            var dMin = String(config.min || 'D1');
+            var dMax = String(config.max || 'D5');
+            var candidates = QuizEngine.getRandomQuestions(1, { min: dMin, max: dMax }, excludeIds);
+            if (candidates && candidates.length > 0) q = candidates[0];
+          } catch(e) { console.warn('[App] getRandomQuestions error:', e); }
+        }
+
+        if (q) {
+          questions.push(q);
+          excludeIds.push(q.id);
+        }
       }
 
-      if (!q) {
-        var candidates = QuizEngine.getRandomQuestions(1, { min: config.min, max: config.max }, excludeIds);
-        if (candidates && candidates.length > 0) q = candidates[0];
+      if (questions.length === 0) {
+        // 最后的fallback：直接取任意题目
+        try {
+          var fallback = QuizEngine.getRandomQuestions(5, { min: 'D1', max: 'D5' }, []);
+          if (fallback && fallback.length > 0) {
+            questions = fallback;
+          }
+        } catch(e) { console.error('[App] Fallback question fetch failed:', e); }
       }
 
-      if (q) {
-        questions.push(q);
-        excludeIds.push(q.id);
+      if (questions.length === 0) {
+        showQuizError('暂无可用题目，请刷新页面重试。');
+        return;
       }
+
+      _state.roundQuestions = questions;
+      safeCall('StreakCounter', 'reset');
+      safeCall('QuizCard', 'reset');
+      renderCurrentQuestion();
+    } catch(err) {
+      console.error('[App] _doStartRound fatal error:', err);
+      showQuizError('答题启动失败：' + (err.message || '未知错误') + '，请刷新页面重试。');
     }
-
-    if (questions.length === 0) {
-      showQuizError('暂无可用题目，请稍后再试。');
-      return;
-    }
-
-    _state.roundQuestions = questions;
-    safeCall('StreakCounter', 'reset');
-    safeCall('QuizCard', 'reset');
-    renderCurrentQuestion();
   }
 
   function renderCurrentQuestion() {
