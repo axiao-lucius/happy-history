@@ -1,0 +1,5 @@
+# 题库开发工具（不上传 Pages）
+tools/
+# 临时文件
+*.log
+.DS_Store

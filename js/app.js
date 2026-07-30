@@ -1,781 +1,672 @@
-/**
- * app.js — 快乐学历史 SPA 主应用入口
- * 负责页面路由、初始化、答题流程编排、语音交互集成
- */
+/* =====================================================
+   快乐学历史 v2.0 · 主应用 (Vanilla JS)
+   ===================================================== */
 (function () {
   'use strict';
 
-  // ==================== 常量与配置 ====================
-
-  var PAGES = ['home', 'quiz', 'rank', 'profile'];
-  var ROUND_SIZE = 5;
-  var VOICE_CONFIDENCE_THRESHOLD = 0.6;
-
-  var DAILY_QUOTES = [
-    '以铜为镜，可以正衣冠；以古为镜，可以知兴替。——唐太宗',
-    '读史使人明智，读诗使人灵秀。——培根',
-    '前事不忘，后事之师。——《战国策》',
-    '鉴前世之兴衰，考当今之得失。——司马光',
-    '究天人之际，通古今之变，成一家之言。——司马迁',
-    '欲知大道，必先为史。——龚自珍',
-    '灭人之国，必先去其史。——龚自珍',
-    '一切历史都是当代史。——克罗齐',
-    '历史是国家和人类的传记。——伏尔泰',
-    '忘记历史就意味着背叛。——列宁'
-  ];
-
-  var RANK_TIERS = [
-    { tier: 'king_glory', title: '荣耀王者·史学宗师', emoji: '👑', color: '#FFD700' },
-    { tier: 'king_strong', title: '最强王者·博古通今', emoji: '⭐', color: '#FF6B6B' },
-    { tier: 'star', title: '至尊星耀·学有所成', emoji: '💎', color: '#9B59B6' },
-    { tier: 'diamond', title: '永恒钻石·初窥门径', emoji: '🔷', color: '#3498DB' },
-    { tier: 'platinum', title: '尊贵铂金·再接再厉', emoji: '🥉', color: '#1ABC9C' },
-    { tier: 'bronze', title: '不屈青铜·从头再来', emoji: '🛡️', color: '#95A5A6' }
-  ];
-
-  // ==================== 应用状态 ====================
-
-  var _state = {
-    currentPage: 'home',
-    roundQuestions: [],
-    currentQuestionIndex: 0,
-    roundCorrectCount: 0,
-    isRoundActive: false,
-    waitingForConfirm: false,
-    voiceSupported: false
+  // ================ 配置 ================
+  const CONFIG = {
+    QUIZ_FILE: 'data/quiz-v4.json',
+    ROUND_SIZE: 5,           // 每轮题目数
+    SCORE_PER: 20,           // 每题分值
+    STORAGE_KEY: 'happy_history_v2',
+    WRONG_KEY: 'happy_history_wrong_v2',
+    SETTINGS_KEY: 'happy_history_settings_v2',
   };
 
-  // ==================== 工具函数 ====================
+  // 段位系统（王者荣耀风格但历史化）
+  const RANKS = [
+    { min: 100, key: 'king',    emblem: '👑', title: '荣耀王者', subtitle: '史学宗师',
+      quote: '究天人之际，通古今之变', color: '#a02c2c' },
+    { min: 80,  key: 'star',    emblem: '⭐', title: '最强王者', subtitle: '博古通今',
+      quote: '腹有诗书气自华', color: '#d4a95c' },
+    { min: 60,  key: 'diamond', emblem: '💎', title: '至尊星耀', subtitle: '学有所成',
+      quote: '学而不厌，诲人不倦', color: '#4c7a5e' },
+    { min: 40,  key: 'plat',    emblem: '🔷', title: '永恒钻石', subtitle: '初窥门径',
+      quote: '路漫漫其修远兮，吾将上下而求索', color: '#5b7db1' },
+    { min: 20,  key: 'gold',    emblem: '🥉', title: '尊贵铂金', subtitle: '再接再厉',
+      quote: '千里之行，始于足下', color: '#b28948' },
+    { min: 0,   key: 'bronze',  emblem: '🛡️', title: '不屈青铜', subtitle: '从头再来',
+      quote: '失败乃成功之母', color: '#8c8272' },
+  ];
 
-  function safeCall(namespace, method) {
-    var args = Array.prototype.slice.call(arguments, 2);
-    if (window[namespace] && typeof window[namespace][method] === 'function') {
-      return window[namespace][method].apply(window[namespace], args);
+  // 情绪化文案 - 答对
+  const RIGHT_LINES = [
+    ['妙哉！', '此题连翰林学士都要赞你三分'],
+    ['答得漂亮！', '这份底蕴，着实令人叹服'],
+    ['当真了得！', '看来诸子百家都被你翻烂了'],
+    ['不错不错！', '博闻强识，就是说的你了'],
+    ['神机妙算！', '此答已入圣手'],
+    ['妙笔生花！', '此等见识，堪称大家'],
+    ['一鼓作气！', '这波节奏，稳如泰山'],
+    ['金榜有名！', '如此才学，必得高中'],
+  ];
+  // 情绪化文案 - 答错
+  const WRONG_LINES = [
+    ['再想想～', '当年苏东坡也在此处栽过跟头'],
+    ['莫要气馁！', '错题恰是最好的老师'],
+    ['无妨！', '一次不成，再来便是'],
+    ['稍安勿躁～', '历史长河，谁未失足过'],
+    ['略有偏差！', '差之毫厘，谬以千里，慢慢来'],
+    ['别急！', '知不足然后能自反也'],
+    ['惜哉！', '此题稍难，记住即可'],
+    ['未曾～', '不知者不罪，看看解析吧'],
+  ];
+
+  // ================ 状态 ================
+  const State = {
+    quiz: null,              // 完整题库 { metadata, questions[] }
+    round: {                 // 当前一轮
+      questions: [],
+      idx: 0,
+      score: 0,
+      results: [],
+      startTime: 0,
+    },
+    userData: null,          // 用户历史数据
+    wrong: [],               // 错题本
+    settings: {
+      sound: true,
+      autoRead: false,
+      voice: false,
+    },
+    lastMode: 'normal',      // 'normal' | 'wrong'（复习错题模式）
+    currentCategory: 'all',
+  };
+
+  // ================ 工具 ================
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+  const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const shuffle = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
     }
-    return null;
+    return a;
+  };
+  function loadJSON(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) || fallback; }
+    catch { return fallback; }
   }
-
-  function $(selector) { return document.querySelector(selector); }
-  function $$(selector) { return document.querySelectorAll(selector); }
-
-  function getRandomQuote() {
-    return DAILY_QUOTES[Math.floor(Math.random() * DAILY_QUOTES.length)];
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { }
   }
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  function toast(msg, ms = 1800) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toast._tid);
+    toast._tid = setTimeout(() => { t.hidden = true; }, ms);
   }
-
-  function showToast(message) {
-    var toast = document.createElement('div');
-    toast.className = 'app-toast';
-    toast.textContent = message;
-    toast.style.cssText = 'position:fixed;top:20%;left:50%;transform:translateX(-50%);' +
-      'background:rgba(0,0,0,0.8);color:#fff;padding:12px 24px;border-radius:8px;' +
-      'z-index:10000;font-size:14px;text-align:center;max-width:80%;transition:opacity 0.3s;';
-    document.body.appendChild(toast);
-    setTimeout(function () {
-      toast.style.opacity = '0';
-      setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
-    }, 2500);
-  }
-
-  // ==================== 页面路由 ====================
-
-  function switchPage(pageName) {
-    if (PAGES.indexOf(pageName) === -1) return;
-
-    var pageContainers = $$('[data-page]');
-    for (var i = 0; i < pageContainers.length; i++) {
-      pageContainers[i].classList.remove('active');
-    }
-
-    var target = $('[data-page="' + pageName + '"]');
-    if (target) target.classList.add('active');
-
-    var navItems = $$('.nav-tab[data-target]');
-    for (var j = 0; j < navItems.length; j++) {
-      navItems[j].classList.remove('active');
-      if (navItems[j].getAttribute('data-target') === pageName) {
-        navItems[j].classList.add('active');
+  function playBeep(ok = true) {
+    if (!State.settings.sound) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = ok ? 'sine' : 'triangle';
+      osc.frequency.value = ok ? 880 : 220;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+      if (ok) {
+        // 上滑第二音
+        const osc2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        osc2.connect(g2); g2.connect(ctx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+        g2.gain.setValueAtTime(0.12, ctx.currentTime + 0.1);
+        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc2.start(ctx.currentTime + 0.1); osc2.stop(ctx.currentTime + 0.5);
       }
-    }
-
-    _state.currentPage = pageName;
-
-    if (pageName === 'home') renderHomePage();
-    else if (pageName === 'rank') renderRankPage();
-    else if (pageName === 'profile') renderProfilePage();
+    } catch (e) { }
+  }
+  function speak(text) {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN'; u.rate = 0.95; u.pitch = 1.05;
+      window.speechSynthesis.speak(u);
+    } catch (e) { }
+  }
+  function vibrate(pattern) {
+    if (navigator.vibrate) navigator.vibrate(pattern);
   }
 
-  function bindNavigation() {
-    var navItems = $$('.nav-tab[data-target]');
-    for (var i = 0; i < navItems.length; i++) {
-      navItems[i].addEventListener('click', function (e) {
-        e.preventDefault();
-        var target = this.getAttribute('data-target');
-        if (target && target !== _state.currentPage) {
-          if (_state.isRoundActive && _state.currentPage === 'quiz') {
-            if (!confirm('答题进行中，确定要离开吗？当前进度将丢失。')) return;
-            _state.isRoundActive = false;
+  // ================ 段位计算 ================
+  function getRank(score) {
+    for (const r of RANKS) {
+      if (score >= r.min) return r;
+    }
+    return RANKS[RANKS.length - 1];
+  }
+
+  // ================ 出题引擎 ================
+  function pickQuestions(pool, size, exclude) {
+    const excl = new Set(exclude || []);
+    const cand = pool.filter(q => !excl.has(q.id));
+    if (cand.length <= size) return shuffle(cand).slice(0, size);
+    // 按难度分层：低-中-中-高-高
+    const buckets = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+    for (const q of cand) {
+      const d = Math.min(5, Math.max(1, q.difficulty || 2));
+      buckets[d].push(q);
+    }
+    for (const d in buckets) buckets[d] = shuffle(buckets[d]);
+    const plan = [1, 2, 2, 3, 3];  // 默认难度节奏
+    // 根据用户已完成轮数动态调整
+    const rounds = State.userData.rounds || 0;
+    const boost = Math.min(2, Math.floor(rounds / 5));
+    const dynamic = plan.map(d => Math.min(5, d + boost));
+    const out = [];
+    const usedIds = new Set();
+    for (const d of dynamic) {
+      // 优先取该难度，取不到则相邻取
+      const order = [d, d - 1, d + 1, d - 2, d + 2].filter(x => x >= 1 && x <= 5);
+      for (const dd of order) {
+        while (buckets[dd].length) {
+          const q = buckets[dd].pop();
+          if (!usedIds.has(q.id)) {
+            out.push(q); usedIds.add(q.id); break;
           }
-          switchPage(target);
         }
-      });
+        if (out.length === dynamic.indexOf(d) + 1) break;
+      }
     }
+    // 补齐（万一某档没有）
+    while (out.length < size) {
+      for (const d in buckets) {
+        if (buckets[d].length) {
+          const q = buckets[d].pop();
+          if (!usedIds.has(q.id)) { out.push(q); usedIds.add(q.id); }
+          if (out.length >= size) break;
+        }
+      }
+      break;
+    }
+    return out.slice(0, size);
   }
 
-  // ==================== 首页(home) ====================
-
-  function renderHomePage() {
-    var adaptiveState = AdaptiveSystem.getState();
-    var todayAnswered = adaptiveState.today_answered_ids ? adaptiveState.today_answered_ids.length : 0;
-    var currentStreak = adaptiveState.current_streak_in_round || 0;
-    var completedStreaks = adaptiveState.completed_streaks_today || 0;
-
-    var statusEl = $('#home-today-status');
-    if (statusEl) {
-      statusEl.innerHTML =
-        '<div class="status-item"><span class="status-value">' + todayAnswered + '</span><span class="status-label">今日已答</span></div>' +
-        '<div class="status-item"><span class="status-value">' + currentStreak + '</span><span class="status-label">当前连胜</span></div>' +
-        '<div class="status-item"><span class="status-value">' + completedStreaks + '</span><span class="status-label">完成轮次</span></div>';
+  function getFilteredPool() {
+    const cat = State.currentCategory;
+    if (cat === 'all' || !cat) return State.quiz.questions;
+    if (cat.startsWith('cat:')) {
+      const c = cat.slice(4);
+      return State.quiz.questions.filter(q => q.category === c);
     }
-
-    var quoteEl = $('#home-daily-quote');
-    if (quoteEl) quoteEl.textContent = getRandomQuote();
-
-    var voiceTipEl = $('#home-voice-tip');
-    if (voiceTipEl) {
-      if (!_state.voiceSupported) {
-        voiceTipEl.style.display = 'block';
-        voiceTipEl.textContent = '💡 建议开启语音以获得最佳体验';
-      } else {
-        voiceTipEl.style.display = 'none';
-      }
+    if (cat.startsWith('dyn:')) {
+      const d = cat.slice(4);
+      return State.quiz.questions.filter(q => q.dynasty === d);
     }
-
-    var startBtn = $('#btn-start-challenge');
-    if (startBtn) {
-      var newBtn = startBtn.cloneNode(true);
-      startBtn.parentNode.replaceChild(newBtn, startBtn);
-      newBtn.addEventListener('click', function () {
-        switchPage('quiz');
-        startRound();
-      });
-    }
+    return State.quiz.questions;
   }
 
-  // ==================== 答题流程(quiz) ====================
-
-  function startRound() {
-    _state.roundQuestions = [];
-    _state.currentQuestionIndex = 0;
-    _state.roundCorrectCount = 0;
-    _state.isRoundActive = true;
-    _state.waitingForConfirm = false;
-
-    var adaptiveState = AdaptiveSystem.getState();
-    var batchConfig = AdaptiveSystem.getNextBatch(adaptiveState);
-    var isFirstQuestionToday = !adaptiveState.today_answered_ids || adaptiveState.today_answered_ids.length === 0;
-    var excludeIds = (adaptiveState.today_answered_ids || []).slice();
-    var questions = [];
-
-    for (var i = 0; i < batchConfig.length; i++) {
-      var config = batchConfig[i];
-      var q = null;
-
-      if (i === 0 && isFirstQuestionToday) {
-        q = QuizEngine.getDailyFirstQuestion();
-      }
-
-      if (!q) {
-        var candidates = QuizEngine.getRandomQuestions(1, { min: config.min, max: config.max }, excludeIds);
-        if (candidates && candidates.length > 0) q = candidates[0];
-      }
-
-      if (q) {
-        questions.push(q);
-        excludeIds.push(q.id);
-      }
-    }
-
-    if (questions.length === 0) {
-      showQuizError('暂无可用题目，请稍后再试。');
-      return;
-    }
-
-    _state.roundQuestions = questions;
-    safeCall('StreakCounter', 'reset');
-    safeCall('QuizCard', 'reset');
-    renderCurrentQuestion();
+  // ================ 场景切换 ================
+  function showScene(name) {
+    ['sceneHome', 'sceneQuiz', 'sceneResult'].forEach(id => {
+      const el = document.getElementById(id);
+      const active = id === name;
+      el.dataset.active = active;
+      el.setAttribute('aria-hidden', !active);
+    });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
-  function renderCurrentQuestion() {
-    if (_state.currentQuestionIndex >= _state.roundQuestions.length) {
-      endRound(_state.roundCorrectCount);
-      return;
+  // ================ 答题流程 ================
+  function startRound(mode = 'normal') {
+    State.lastMode = mode;
+    let pool;
+    if (mode === 'wrong') {
+      if (State.wrong.length < CONFIG.ROUND_SIZE) {
+        toast('错题不足 5 道，先去多练几轮吧');
+        return;
+      }
+      pool = State.wrong.slice();
+    } else {
+      pool = getFilteredPool();
+      if (pool.length < CONFIG.ROUND_SIZE) {
+        toast('该分类题目不足，切换到全部');
+        State.currentCategory = 'all';
+        pool = State.quiz.questions;
+      }
     }
+    // 30天去重
+    const recent = (State.userData.recentQIds || []).slice(-100);
+    let picked = pickQuestions(pool, CONFIG.ROUND_SIZE, recent);
+    if (picked.length < CONFIG.ROUND_SIZE) {
+      picked = pickQuestions(pool, CONFIG.ROUND_SIZE, []);
+    }
+    State.round = {
+      questions: picked,
+      idx: 0,
+      score: 0,
+      results: [],
+      startTime: Date.now(),
+    };
+    showScene('sceneQuiz');
+    renderQuestion();
+  }
 
-    var question = _state.roundQuestions[_state.currentQuestionIndex];
-    var progressText = (_state.currentQuestionIndex + 1) + ' / ' + _state.roundQuestions.length;
+  function renderQuestion() {
+    const q = State.round.questions[State.round.idx];
+    if (!q) { finishRound(); return; }
 
-    var progressEl = $('#quiz-progress');
-    if (progressEl) progressEl.textContent = progressText;
+    // 头部信息
+    const total = State.round.questions.length;
+    $('#progressText').textContent = `第 ${State.round.idx + 1} / ${total} 题`;
+    $('#progressFill').style.width = `${((State.round.idx) / total) * 100}%`;
+    $('#scoreBadge').textContent = `已得 ${State.round.score} 分`;
 
-    safeCall('QuizCard', 'render', question, {
-      onOptionClick: handleAnswer,
-      showMicButton: _state.voiceSupported
+    $('#qIndex').textContent = State.round.idx + 1;
+    $('#qDynasty').textContent = q.dynasty || '综合';
+    $('#qDifficulty').textContent = '难度 ' + '★'.repeat(Math.min(5, q.difficulty || 2));
+    const catMap = { k12: '📖 教材', event: '⚔ 事件', book: '📚 著作' };
+    $('#qCategory').textContent = catMap[q.category] || '综合';
+    $('#qText').textContent = q.question;
+
+    // 语音按钮显隐
+    $('#btnMic').hidden = !State.settings.voice ||
+      !('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
+
+    // 选项
+    const box = $('#options');
+    box.innerHTML = '';
+    q.options.forEach((opt, i) => {
+      const letter = opt.match(/^([A-D])[.、\s]/)?.[1] || 'ABCD'[i];
+      const text = opt.replace(/^[A-D][.、\s]*/, '');
+      const btn = document.createElement('button');
+      btn.className = 'option';
+      btn.dataset.letter = letter;
+      btn.innerHTML = `<span class="option-letter">${letter}</span><span class="option-text">${text}</span>`;
+      btn.addEventListener('click', () => handleAnswer(letter, btn));
+      box.appendChild(btn);
     });
 
-    if (!window.QuizCard || typeof window.QuizCard.render !== 'function') {
-      renderFallbackQuestion(question);
-    }
+    // 反馈区隐藏
+    $('#feedback').hidden = true;
+    $('#feedback').classList.remove('right', 'wrong');
 
-    bindMicButton(question);
+    // 自动朗读
+    if (State.settings.autoRead) speak(q.question);
   }
 
-  function renderFallbackQuestion(question) {
-    var container = $('#quiz-card-container');
-    if (!container) return;
+  function handleAnswer(letter, btnEl) {
+    const q = State.round.questions[State.round.idx];
+    if (!q) return;
+    // 已答，不响应
+    if ($$('#options .option.disabled').length) return;
+    const correct = letter === q.answer;
+    $$('#options .option').forEach(b => {
+      b.classList.add('disabled');
+      const l = b.dataset.letter;
+      if (l === q.answer) b.classList.add('correct');
+      if (l === letter && !correct) b.classList.add('wrong');
+    });
 
-    var optionsHtml = '';
-    var labels = ['A', 'B', 'C', 'D'];
-    var options = question.options || [];
-
-    for (var i = 0; i < options.length; i++) {
-      optionsHtml += '<div class="quiz-option" data-option="' + labels[i] + '">' +
-        '<span class="option-label">' + labels[i] + '</span>' +
-        '<span class="option-text">' + escapeHtml(options[i]) + '</span></div>';
-    }
-
-    container.innerHTML =
-      '<div class="quiz-card-fallback">' +
-        '<div class="question-dynasty">' + escapeHtml(question.dynasty || '') + '</div>' +
-        '<div class="question-text">' + escapeHtml(question.question || question.text || '') + '</div>' +
-        '<div class="options-list">' + optionsHtml + '</div>' +
-        (_state.voiceSupported ? '<button id="btn-mic" class="mic-btn">🎤 语音回答</button>' : '') +
-      '</div>';
-
-    var optionEls = container.querySelectorAll('.quiz-option');
-    for (var j = 0; j < optionEls.length; j++) {
-      optionEls[j].addEventListener('click', function () {
-        handleAnswer(this.getAttribute('data-option'));
-      });
-    }
-  }
-
-  function handleAnswer(selectedOption) {
-    if (_state.waitingForConfirm || !_state.isRoundActive) return;
-    _state.waitingForConfirm = true;
-
-    var question = _state.roundQuestions[_state.currentQuestionIndex];
-    var correctAnswer = question.answer || question.correctAnswer || '';
-    var isCorrect = (selectedOption === correctAnswer);
-
-    var adaptiveState = AdaptiveSystem.getState();
-    if (!adaptiveState.today_answered_ids) adaptiveState.today_answered_ids = [];
-    if (adaptiveState.today_answered_ids.indexOf(question.id) === -1) {
-      adaptiveState.today_answered_ids.push(question.id);
-    }
-    adaptiveState = AdaptiveSystem.recordAnswer(adaptiveState, isCorrect);
-
-    if (!isCorrect) StateManager.addToWrongBook(question);
-    StateManager.updateStats(isCorrect, adaptiveState.current_streak_in_round || 0);
-
-    if (isCorrect) {
-      _state.roundCorrectCount++;
-      safeCall('StreakCounter', 'update', adaptiveState.current_streak_in_round || 0);
-      if ((adaptiveState.current_streak_in_round || 0) >= 3) {
-        safeCall('StreakCounter', 'showCombo', adaptiveState.current_streak_in_round);
+    if (correct) {
+      State.round.score += CONFIG.SCORE_PER;
+      playBeep(true);
+      vibrate(30);
+      // 如果是错题本模式且答对，从错题本移除
+      if (State.lastMode === 'wrong') {
+        State.wrong = State.wrong.filter(w => w.id !== q.id);
+        saveJSON(CONFIG.WRONG_KEY, State.wrong);
       }
     } else {
-      safeCall('StreakCounter', 'reset');
-    }
-
-    var estimatedScore = ScoringSystem.calculateScore(_state.roundCorrectCount, _state.currentQuestionIndex + 1);
-    var currentRank = ScoringSystem.getRank(estimatedScore);
-
-    safeCall('QuizCard', 'showFeedback', isCorrect, {
-      correctAnswer: correctAnswer,
-      explanation: question.explanation || ''
-    });
-
-    if (!window.QuizCard || typeof window.QuizCard.showFeedback !== 'function') {
-      showFallbackFeedback(isCorrect, correctAnswer, question.explanation);
-    }
-
-    safeCall('QuizCard', 'highlightOption', selectedOption, isCorrect);
-
-    var feedbackVoice = ScoringSystem.getFeedbackVoice(currentRank, isCorrect);
-    VoiceEngine.speak(feedbackVoice, { emotion: isCorrect ? 'excited' : 'comfort' });
-  }
-
-  function showFallbackFeedback(isCorrect, correctAnswer, explanation) {
-    var container = $('#quiz-feedback');
-    if (!container) {
-      var parent = $('#quiz-card-container');
-      if (parent) {
-        container = document.createElement('div');
-        container.id = 'quiz-feedback';
-        parent.appendChild(container);
+      playBeep(false);
+      vibrate([40, 60, 40]);
+      // 加入错题本
+      const already = State.wrong.find(w => w.id === q.id);
+      if (!already) {
+        State.wrong.unshift(q);
+        if (State.wrong.length > 200) State.wrong.pop();
+        saveJSON(CONFIG.WRONG_KEY, State.wrong);
       }
     }
-    if (!container) return;
 
-    container.className = isCorrect ? 'feedback-correct' : 'feedback-wrong';
-    container.innerHTML =
-      '<div class="feedback-header">' +
-        '<span class="feedback-icon">' + (isCorrect ? '✅' : '❌') + '</span>' +
-        '<span class="feedback-title">' + (isCorrect ? '回答正确！' : '回答错误') + '</span>' +
-      '</div>' +
-      (!isCorrect ? '<div class="feedback-correct-answer">正确答案：' + escapeHtml(correctAnswer) + '</div>' : '') +
-      (explanation ? '<div class="feedback-explanation">' + escapeHtml(explanation) + '</div>' : '') +
-      '<button class="btn-next-question">下一题 →</button>';
-    container.style.display = 'block';
+    // 记录结果
+    State.round.results.push({
+      qid: q.id, question: q.question, answer: q.answer, user: letter,
+      correct, explanation: q.explanation,
+    });
 
-    var nextBtn = container.querySelector('.btn-next-question');
-    if (nextBtn) {
-      nextBtn.addEventListener('click', function () {
-        container.style.display = 'none';
-        nextQuestion();
-      });
-    }
+    // 更新 recent
+    const rec = State.userData.recentQIds || [];
+    rec.push(q.id);
+    if (rec.length > 200) rec.splice(0, rec.length - 200);
+    State.userData.recentQIds = rec;
+    saveUserData();
+
+    // 显示反馈
+    showFeedback(correct, q);
+    $('#scoreBadge').textContent = `已得 ${State.round.score} 分`;
+    $('#progressFill').style.width = `${((State.round.idx + 1) / State.round.questions.length) * 100}%`;
+  }
+
+  function showFeedback(correct, q) {
+    const fb = $('#feedback');
+    const [title, tip] = rand(correct ? RIGHT_LINES : WRONG_LINES);
+    $('#fbIcon').textContent = correct ? '✔' : '✘';
+    $('#fbTitle').textContent = title;
+    $('#fbBody').innerHTML = `<p style="margin:0 0 6px;color:${correct ? '#4c7a5e' : '#a02c2c'};font-weight:600;">${tip}</p>` +
+      `<p style="margin:0;">正确答案：<b>${q.answer}</b>。${q.explanation || ''}</p>`;
+    fb.classList.add(correct ? 'right' : 'wrong');
+    fb.hidden = false;
   }
 
   function nextQuestion() {
-    _state.waitingForConfirm = false;
-    _state.currentQuestionIndex++;
-    if (_state.currentQuestionIndex >= _state.roundQuestions.length) {
-      endRound(_state.roundCorrectCount);
+    State.round.idx += 1;
+    if (State.round.idx >= State.round.questions.length) {
+      finishRound();
     } else {
-      renderCurrentQuestion();
+      renderQuestion();
     }
   }
 
-  function endRound(correctCount) {
-    _state.isRoundActive = false;
-    _state.waitingForConfirm = false;
+  function finishRound() {
+    const score = State.round.score;
+    const rank = getRank(score);
+    // 累积到用户数据
+    State.userData.rounds = (State.userData.rounds || 0) + 1;
+    State.userData.bestScore = Math.max(State.userData.bestScore || 0, score);
+    // 连胜（本轮 5 题全对 +1 连胜；否则清零）
+    const allRight = State.round.results.every(r => r.correct);
+    State.userData.streak = allRight ? (State.userData.streak || 0) + 1 : 0;
+    State.userData.maxStreak = Math.max(State.userData.maxStreak || 0, State.userData.streak);
+    // 最近记录
+    const recent = State.userData.recentRounds || [];
+    recent.unshift({
+      time: Date.now(),
+      score,
+      rankKey: rank.key,
+      rankTitle: rank.title,
+      allRight,
+    });
+    State.userData.recentRounds = recent.slice(0, 10);
+    saveUserData();
+    renderResult(score, rank);
+    showScene('sceneResult');
+  }
 
-    var totalQuestions = _state.roundQuestions.length;
-    var score = ScoringSystem.calculateScore(correctCount, totalQuestions);
-    var rank = ScoringSystem.getRank(score);
-    var encouragement = ScoringSystem.getEncouragementText(rank, correctCount);
+  function renderResult(score, rank) {
+    $('#rankEmblem').textContent = rank.emblem;
+    $('#rankTitle').textContent = rank.title;
+    $('#rankTitle').style.color = rank.color;
+    $('#rankSubtitle').textContent = rank.subtitle;
+    $('#rankSubtitle').style.color = rank.color;
+    $('#rankScoreNum').textContent = score;
+    $('#rankQuote').textContent = `"${rank.quote}"`;
 
-    var historyStats = StateManager.getHistoryStats();
-    var achievementStats = {
-      bestScore: Math.max(score, historyStats.bestScore || 0),
-      currentStreak: historyStats.maxStreak || 0,
-      totalCorrect: historyStats.totalCorrect || 0,
-      unlockedTiers: getUnlockedTiers(),
-      existingAchievements: (StateManager.getAchievements() || []).map(function (a) { return a.id; })
-    };
-
-    var achievementResult = ScoringSystem.checkAchievements(achievementStats);
-
-    if (achievementResult.newAchievements && achievementResult.newAchievements.length > 0) {
-      for (var i = 0; i < achievementResult.newAchievements.length; i++) {
-        StateManager.unlockAchievement(achievementResult.newAchievements[i].id);
-      }
-    }
-
-    if (score > (historyStats.bestScore || 0)) {
-      historyStats.bestScore = score;
-      StateManager.save('happy_history_stats', historyStats);
-    }
-
-    saveUnlockedTier(rank.tier);
-
-    safeCall('RankReveal', 'show', {
-      score: score, rank: rank, correctCount: correctCount,
-      totalQuestions: totalQuestions, encouragement: encouragement,
-      newAchievements: achievementResult.newAchievements,
-      onDismiss: function () { safeCall('RankReveal', 'hide'); switchPage('home'); }
+    // 回顾列表
+    const list = $('#reviewList');
+    list.innerHTML = '';
+    State.round.results.forEach((r, i) => {
+      const li = document.createElement('li');
+      li.className = 'review-item';
+      li.innerHTML = `
+        <span class="review-mark ${r.correct ? 'right' : 'wrong'}">${r.correct ? '✓' : '✗'}</span>
+        <div>
+          <div class="review-q">${i + 1}. ${r.question}</div>
+          <div class="review-a">你选 ${r.user || '—'} · 正确答案 ${r.answer}</div>
+        </div>
+      `;
+      list.appendChild(li);
     });
 
-    if (!window.RankReveal || typeof window.RankReveal.show !== 'function') {
-      showFallbackRoundResult(score, rank, correctCount, totalQuestions, encouragement, achievementResult.newAchievements);
-    }
-
-    VoiceEngine.speak(encouragement, { emotion: score >= 60 ? 'excited' : 'encourage' });
+    // 粒子动画
+    if (score >= 60) startParticles(rank.color, score >= 100 ? 120 : 60);
   }
 
-  function showFallbackRoundResult(score, rank, correctCount, totalQuestions, encouragement, newAchievements) {
-    var container = $('#quiz-result-overlay');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'quiz-result-overlay';
-      container.className = 'result-overlay';
-      document.body.appendChild(container);
-    }
-
-    var achHtml = '';
-    if (newAchievements && newAchievements.length > 0) {
-      achHtml = '<div class="new-achievements"><h3>🎉 新成就解锁！</h3>';
-      for (var i = 0; i < newAchievements.length; i++) {
-        achHtml += '<div class="achievement-item"><span class="achievement-icon">' +
-          newAchievements[i].icon + '</span><span class="achievement-name">' +
-          escapeHtml(newAchievements[i].name) + '</span></div>';
-      }
-      achHtml += '</div>';
-    }
-
-    container.innerHTML =
-      '<div class="result-card">' +
-        '<div class="result-rank-emoji" style="font-size:4rem;">' + rank.emoji + '</div>' +
-        '<div class="result-rank-title" style="color:' + rank.color + ';">' + escapeHtml(rank.title) + '</div>' +
-        '<div class="result-score">' + score + '分</div>' +
-        '<div class="result-detail">答对 ' + correctCount + ' / ' + totalQuestions + ' 题</div>' +
-        '<div class="result-encouragement">' + escapeHtml(encouragement) + '</div>' +
-        achHtml +
-        '<button class="btn-back-home">返回首页</button>' +
-      '</div>';
-    container.style.display = 'flex';
-
-    var backBtn = container.querySelector('.btn-back-home');
-    if (backBtn) {
-      backBtn.addEventListener('click', function () {
-        container.style.display = 'none';
-        switchPage('home');
+  // ================ 粒子动画 ================
+  let particleAnimId = null;
+  function startParticles(color, count) {
+    const canvas = $('#particleCanvas');
+    const stage = canvas.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = stage.offsetWidth * dpr;
+    canvas.height = stage.offsetHeight * dpr;
+    canvas.style.width = stage.offsetWidth + 'px';
+    canvas.style.height = stage.offsetHeight + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = stage.offsetWidth, H = stage.offsetHeight;
+    const colors = [color, '#d4a95c', '#a02c2c', '#f6efe0'];
+    const ps = [];
+    for (let i = 0; i < count; i++) {
+      ps.push({
+        x: W / 2 + (Math.random() - 0.5) * 60,
+        y: 80 + (Math.random() - 0.5) * 40,
+        vx: (Math.random() - 0.5) * 4,
+        vy: -3 - Math.random() * 4,
+        r: 2 + Math.random() * 4,
+        color: colors[i % colors.length],
+        life: 1,
       });
     }
-  }
-
-  function showQuizError(message) {
-    var container = $('#quiz-card-container');
-    if (container) {
-      container.innerHTML = '<div class="quiz-error"><p>' + escapeHtml(message) +
-        '</p><button class="btn-back-home-error">返回首页</button></div>';
-      var btn = container.querySelector('.btn-back-home-error');
-      if (btn) btn.addEventListener('click', function () { switchPage('home'); });
-    }
-  }
-
-  // ==================== 语音交互集成 ====================
-
-  function bindMicButton(question) {
-    setTimeout(function () {
-      var micBtn = $('#btn-mic') || $('.mic-btn');
-      if (!micBtn) return;
-
-      var newMic = micBtn.cloneNode(true);
-      micBtn.parentNode.replaceChild(newMic, micBtn);
-
-      newMic.addEventListener('click', function () {
-        if (_state.waitingForConfirm) return;
-        newMic.classList.add('listening');
-        newMic.textContent = '🎤 正在听...';
-
-        VoiceEngine.startListening(
-          function (transcript) {
-            newMic.classList.remove('listening');
-            newMic.textContent = '🎤 语音回答';
-
-            var optionTexts = {};
-            var labels = ['A', 'B', 'C', 'D'];
-            var options = question.options || [];
-            for (var i = 0; i < options.length; i++) optionTexts[labels[i]] = options[i];
-
-            var correctAnswer = question.answer || question.correctAnswer || '';
-            var matchResult = VoiceEngine.matchAnswer(transcript, correctAnswer, { optionTexts: optionTexts });
-
-            if (matchResult.confidence >= VOICE_CONFIDENCE_THRESHOLD && matchResult.matchedOption) {
-              handleAnswer(matchResult.matchedOption);
-            } else {
-              VoiceEngine.speak('没听清，请再说一次或点击选项', { emotion: 'normal' });
-              showToast('没听清，请再说一次或点击选项');
-            }
-          },
-          function (error) {
-            newMic.classList.remove('listening');
-            newMic.textContent = '🎤 语音回答';
-            console.warn('[App] Voice recognition error:', error);
-            showToast('语音识别失败，请点击选项作答');
-          }
-        );
-      });
-    }, 100);
-  }
-
-  // ==================== 段位页(rank) ====================
-
-  function getUnlockedTiers() {
-    var tiers = StateManager.load('happy_history_unlocked_tiers');
-    return Array.isArray(tiers) ? tiers : [];
-  }
-
-  function saveUnlockedTier(tier) {
-    var tiers = getUnlockedTiers();
-    if (tiers.indexOf(tier) === -1) {
-      tiers.push(tier);
-      StateManager.save('happy_history_unlocked_tiers', tiers);
-    }
-
-    var history = StateManager.load('happy_history_rank_history') || [];
-    var today = new Date();
-    var dateStr = today.getFullYear() + '-' +
-      String(today.getMonth() + 1).padStart(2, '0') + '-' +
-      String(today.getDate()).padStart(2, '0');
-    var stats = StateManager.getHistoryStats();
-    var rankInfo = ScoringSystem.getRank(stats.bestScore || 0);
-
-    history.push({
-      date: dateStr, tier: tier, rankTitle: rankInfo.title,
-      score: stats.bestScore || 0, timestamp: today.toISOString()
-    });
-    StateManager.save('happy_history_rank_history', history);
-  }
-
-  function renderRankPage() {
-    var historyStats = StateManager.getHistoryStats();
-    var bestScore = historyStats.bestScore || 0;
-    var currentRank = ScoringSystem.getRank(bestScore);
-    var unlockedTiers = getUnlockedTiers();
-
-    var currentRankEl = $('#rank-current');
-    if (currentRankEl) {
-      currentRankEl.innerHTML =
-        '<div class="rank-display">' +
-          '<div class="rank-emoji" style="font-size:3rem;">' + currentRank.emoji + '</div>' +
-          '<div class="rank-title" style="color:' + currentRank.color + ';">' + escapeHtml(currentRank.title) + '</div>' +
-          '<div class="rank-score">最高分：' + bestScore + '</div>' +
-        '</div>';
-    }
-
-    var galleryEl = $('#rank-gallery');
-    if (galleryEl) {
-      var html = '';
-      for (var i = 0; i < RANK_TIERS.length; i++) {
-        var t = RANK_TIERS[i];
-        var isUnlocked = unlockedTiers.indexOf(t.tier) !== -1;
-        html += '<div class="tier-item ' + (isUnlocked ? 'tier-unlocked' : 'tier-locked') +
-          '" style="opacity:' + (isUnlocked ? '1' : '0.3') + ';">' +
-          '<div class="tier-emoji">' + t.emoji + '</div>' +
-          '<div class="tier-title" style="color:' + t.color + ';">' + escapeHtml(t.title) + '</div>' +
-          '<div class="tier-badge">' + (isUnlocked ? '已解锁' : '未解锁') + '</div></div>';
-      }
-      galleryEl.innerHTML = html;
-    }
-
-    var historyEl = $('#rank-history');
-    if (historyEl) {
-      var rankHistory = StateManager.load('happy_history_rank_history') || [];
-      if (rankHistory.length === 0) {
-        historyEl.innerHTML = '<p class="empty-hint">暂无段位记录，快去答题吧！</p>';
-      } else {
-        var hHtml = '';
-        var recent = rankHistory.slice(-10).reverse();
-        for (var r = 0; r < recent.length; r++) {
-          var rec = recent[r];
-          hHtml += '<div class="rank-record">' +
-            '<span class="record-date">' + escapeHtml(rec.date || '') + '</span>' +
-            '<span class="record-rank">' + escapeHtml(rec.rankTitle || '') + '</span>' +
-            '<span class="record-score">' + (rec.score || 0) + '分</span></div>';
+    cancelAnimationFrame(particleAnimId);
+    function frame() {
+      ctx.clearRect(0, 0, W, H);
+      let alive = 0;
+      for (const p of ps) {
+        p.vy += 0.12;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.008;
+        if (p.life > 0 && p.y < H + 20) {
+          alive++;
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
         }
-        historyEl.innerHTML = hHtml;
       }
+      if (alive > 0) particleAnimId = requestAnimationFrame(frame);
+    }
+    frame();
+  }
+
+  // ================ 首页渲染 ================
+  function renderHome() {
+    // 统计
+    $('#statTotal').textContent = State.quiz.metadata.total_count || State.quiz.questions.length;
+    $('#statStreak').textContent = State.userData.maxStreak || 0;
+    $('#statRounds').textContent = State.userData.rounds || 0;
+
+    // 段位一览
+    const grid = $('#rankGrid');
+    grid.innerHTML = '';
+    RANKS.slice().reverse().forEach(r => {
+      const cell = document.createElement('div');
+      cell.className = 'rank-cell';
+      cell.innerHTML = `
+        <div class="rank-cell-emblem">${r.emblem}</div>
+        <div class="rank-cell-name" style="color:${r.color}">${r.title}</div>
+        <div class="rank-cell-score">${r.min} 分起</div>
+      `;
+      grid.appendChild(cell);
+    });
+
+    // 分类 chips
+    const chips = $('#categoryChips');
+    chips.innerHTML = '';
+    const items = [
+      { key: 'all', label: '📚 全部题库' },
+      { key: 'cat:k12', label: '📖 教材主干' },
+      { key: 'cat:event', label: '⚔ 重大事件' },
+      { key: 'cat:book', label: '📜 历史著作' },
+      { key: 'dyn:先秦', label: '先秦' },
+      { key: 'dyn:秦汉', label: '秦汉' },
+      { key: 'dyn:隋唐', label: '隋唐' },
+      { key: 'dyn:宋元', label: '宋元' },
+      { key: 'dyn:明清', label: '明清' },
+      { key: 'dyn:近现代', label: '近现代' },
+    ];
+    items.forEach(it => {
+      const el = document.createElement('button');
+      el.className = 'chip' + (State.currentCategory === it.key ? ' active' : '');
+      el.textContent = it.label;
+      el.addEventListener('click', () => {
+        State.currentCategory = it.key;
+        renderHome();
+      });
+      chips.appendChild(el);
+    });
+
+    // 最近记录
+    const rr = State.userData.recentRounds || [];
+    const sec = $('#recentSection');
+    if (rr.length) {
+      sec.hidden = false;
+      const list = $('#recentList');
+      list.innerHTML = '';
+      rr.slice(0, 5).forEach(rec => {
+        const rank = RANKS.find(r => r.key === rec.rankKey) || RANKS[RANKS.length - 1];
+        const li = document.createElement('li');
+        li.className = 'recent-item';
+        const d = new Date(rec.time);
+        const time = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        li.innerHTML = `
+          <span class="recent-emblem">${rank.emblem}</span>
+          <div class="recent-info">
+            <div class="recent-title">${rank.title}${rec.allRight ? ' · 全对！' : ''}</div>
+            <div class="recent-time">${time}</div>
+          </div>
+          <span class="recent-score">${rec.score}</span>
+        `;
+        list.appendChild(li);
+      });
+    } else {
+      sec.hidden = true;
     }
   }
 
-  // ==================== 个人页(profile) ====================
-
-  function renderProfilePage() {
-    var stats = StateManager.getHistoryStats();
-
-    var statsEl = $('#profile-stats');
-    if (statsEl) {
-      statsEl.innerHTML =
-        '<div class="stat-grid">' +
-          '<div class="stat-item"><span class="stat-value">' + (stats.totalAnswered || 0) + '</span><span class="stat-label">总答题数</span></div>' +
-          '<div class="stat-item"><span class="stat-value">' + (stats.accuracy || 0) + '%</span><span class="stat-label">正确率</span></div>' +
-          '<div class="stat-item"><span class="stat-value">' + (stats.maxStreak || 0) + '</span><span class="stat-label">最高连胜</span></div>' +
-          '<div class="stat-item"><span class="stat-value">' + (stats.totalCorrect || 0) + '</span><span class="stat-label">累计答对</span></div>' +
-        '</div>';
-    }
-
-    renderWrongBook();
-    renderAchievements();
-    bindDataOperations();
-    renderAboutInfo();
+  // ================ 抽屉/设置 ================
+  function openDrawer() {
+    $('#drawer').setAttribute('aria-hidden', 'false');
+    renderDrawer();
+  }
+  function closeDrawer() { $('#drawer').setAttribute('aria-hidden', 'true'); }
+  function renderDrawer() {
+    const rank = getRank(State.userData.bestScore || 0);
+    $('#myRankEmblem').textContent = rank.emblem;
+    $('#myRankTitle').textContent = rank.title;
+    $('#myRankTitle').style.color = rank.color;
+    $('#myBestScore').textContent = State.userData.bestScore || 0;
+    $('#myRounds').textContent = State.userData.rounds || 0;
+    $('#wrongCount').textContent = State.wrong.length;
+    $('#setSound').checked = State.settings.sound;
+    $('#setAutoRead').checked = State.settings.autoRead;
+    $('#setVoice').checked = State.settings.voice;
   }
 
-  function renderWrongBook() {
-    var container = $('#profile-wrong-book');
-    if (!container) return;
+  // ================ 数据持久化 ================
+  function saveUserData() { saveJSON(CONFIG.STORAGE_KEY, State.userData); }
+  function saveSettings() { saveJSON(CONFIG.SETTINGS_KEY, State.settings); }
 
-    var wrongBook = StateManager.getWrongBook();
-    if (wrongBook.length === 0) {
-      container.innerHTML = '<p class="empty-hint">🎉 暂无错题，继续保持！</p>';
+  // ================ 事件绑定 ================
+  function bindEvents() {
+    $('#btnStart').addEventListener('click', () => startRound('normal'));
+    $('#btnNext').addEventListener('click', nextQuestion);
+    $('#btnQuit').addEventListener('click', () => {
+      if (confirm('确定退出当前答题？分数将不计入。')) showScene('sceneHome');
+    });
+    $('#btnAgain').addEventListener('click', () => startRound(State.lastMode));
+    $('#btnBackHome').addEventListener('click', () => { showScene('sceneHome'); renderHome(); });
+    $('#btnMenu').addEventListener('click', openDrawer);
+    $('#btnCloseDrawer').addEventListener('click', closeDrawer);
+    $('#drawerMask').addEventListener('click', closeDrawer);
+    $('#btnReviewWrong').addEventListener('click', () => {
+      closeDrawer();
+      startRound('wrong');
+    });
+    $('#btnResetAll').addEventListener('click', () => {
+      if (confirm('确定清空所有战绩、错题和设置？此操作不可恢复。')) {
+        localStorage.removeItem(CONFIG.STORAGE_KEY);
+        localStorage.removeItem(CONFIG.WRONG_KEY);
+        localStorage.removeItem(CONFIG.SETTINGS_KEY);
+        State.userData = {};
+        State.wrong = [];
+        State.settings = { sound: true, autoRead: false, voice: false };
+        renderHome();
+        renderDrawer();
+        toast('已清空所有数据');
+      }
+    });
+    $('#setSound').addEventListener('change', e => { State.settings.sound = e.target.checked; saveSettings(); });
+    $('#setAutoRead').addEventListener('change', e => { State.settings.autoRead = e.target.checked; saveSettings(); });
+    $('#setVoice').addEventListener('change', e => { State.settings.voice = e.target.checked; saveSettings(); });
+    $('#btnSpeak').addEventListener('click', () => {
+      const q = State.round.questions[State.round.idx];
+      if (q) speak(q.question);
+    });
+    $('#btnMic').addEventListener('click', voiceInput);
+
+    // 网络状态
+    const updateNet = () => {
+      $('#offlineBadge').hidden = navigator.onLine;
+    };
+    window.addEventListener('online', updateNet);
+    window.addEventListener('offline', updateNet);
+    updateNet();
+  }
+
+  // ================ 语音识别 ================
+  function voiceInput() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast('当前浏览器不支持语音识别'); return; }
+    const rec = new SR();
+    rec.lang = 'zh-CN';
+    rec.interimResults = false;
+    rec.maxAlternatives = 3;
+    toast('请说：A / B / C / D 或答案文字');
+    rec.onresult = (e) => {
+      const txt = e.results[0][0].transcript.trim();
+      toast(`听到：${txt}`);
+      // 匹配 ABCD
+      const letter = txt.match(/[abcdABCD]/)?.[0]?.toUpperCase() ||
+        { '一': 'A', '二': 'B', '三': 'C', '四': 'D' }[txt[0]] ||
+        (txt.includes('第一') ? 'A' : txt.includes('第二') ? 'B' :
+          txt.includes('第三') ? 'C' : txt.includes('第四') ? 'D' : null);
+      if (letter) {
+        const btn = document.querySelector(`.option[data-letter="${letter}"]`);
+        if (btn) btn.click();
+      } else {
+        toast('未识别，请说 A/B/C/D');
+      }
+    };
+    rec.onerror = () => toast('语音识别失败');
+    try { rec.start(); } catch (e) { toast('无法启动麦克风'); }
+  }
+
+  // ================ 启动 ================
+  async function boot() {
+    // 载入用户数据 & 设置
+    State.userData = loadJSON(CONFIG.STORAGE_KEY, {});
+    State.wrong = loadJSON(CONFIG.WRONG_KEY, []);
+    const savedSet = loadJSON(CONFIG.SETTINGS_KEY, null);
+    if (savedSet) State.settings = { ...State.settings, ...savedSet };
+
+    // 载入题库
+    try {
+      const r = await fetch(CONFIG.QUIZ_FILE + '?v=' + Date.now(), { cache: 'no-cache' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      State.quiz = await r.json();
+    } catch (e) {
+      console.error('加载题库失败', e);
+      toast('题库加载失败，请刷新重试');
       return;
     }
 
-    var html = '<div class="wrong-book-header"><h3>📝 错题本 (' + wrongBook.length + ')</h3></div><div class="wrong-book-list">';
-    for (var i = 0; i < wrongBook.length; i++) {
-      var q = wrongBook[i];
-      html += '<div class="wrong-item" data-id="' + escapeHtml(q.id) + '">' +
-        '<div class="wrong-question"><span class="wrong-dynasty">' + escapeHtml(q.dynasty || '') +
-        '</span><span class="wrong-text">' + escapeHtml(q.question || q.text || '') + '</span></div>' +
-        '<button class="btn-remove-wrong" data-id="' + escapeHtml(q.id) + '">已掌握 ✕</button></div>';
-    }
-    html += '</div>';
-    container.innerHTML = html;
-
-    var removeBtns = container.querySelectorAll('.btn-remove-wrong');
-    for (var j = 0; j < removeBtns.length; j++) {
-      removeBtns[j].addEventListener('click', function () {
-        StateManager.removeFromWrongBook(this.getAttribute('data-id'));
-        renderWrongBook();
-      });
-    }
+    bindEvents();
+    renderHome();
   }
 
-  function renderAchievements() {
-    var container = $('#profile-achievements');
-    if (!container) return;
-
-    var unlockedAchievements = StateManager.getAchievements();
-    var unlockedIds = {};
-    for (var i = 0; i < unlockedAchievements.length; i++) {
-      unlockedIds[unlockedAchievements[i].id] = true;
-    }
-
-    var stats = StateManager.getHistoryStats();
-    var achievementResult = ScoringSystem.checkAchievements({
-      bestScore: stats.bestScore || 0,
-      currentStreak: stats.maxStreak || 0,
-      totalCorrect: stats.totalCorrect || 0,
-      unlockedTiers: getUnlockedTiers(),
-      existingAchievements: Object.keys(unlockedIds)
-    });
-
-    var allAchievements = achievementResult.allAchievements || [];
-    if (allAchievements.length === 0) {
-      container.innerHTML = '<p class="empty-hint">暂无成就信息</p>';
-      return;
-    }
-
-    var html = '<h3>🏅 成就墙</h3><div class="achievement-grid">';
-    for (var j = 0; j < allAchievements.length; j++) {
-      var ach = allAchievements[j];
-      html += '<div class="achievement-badge ' + (ach.unlocked ? 'achievement-unlocked' : 'achievement-locked') +
-        '" style="opacity:' + (ach.unlocked ? '1' : '0.4') + ';">' +
-        '<div class="badge-icon">' + ach.icon + '</div>' +
-        '<div class="badge-name">' + escapeHtml(ach.name) + '</div>' +
-        '<div class="badge-desc">' + escapeHtml(ach.description) + '</div></div>';
-    }
-    html += '</div>';
-    container.innerHTML = html;
-  }
-
-  function bindDataOperations() {
-    var exportBtn = $('#btn-export-data');
-    if (exportBtn) {
-      var newExport = exportBtn.cloneNode(true);
-      exportBtn.parentNode.replaceChild(newExport, exportBtn);
-      newExport.addEventListener('click', function () {
-        var jsonStr = StateManager.exportData();
-        var blob = new Blob([jsonStr], { type: 'application/json' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'happy-history-backup-' + new Date().toISOString().slice(0, 10) + '.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast('数据导出成功');
-      });
-    }
-
-    var importBtn = $('#btn-import-data');
-    var importFile = $('#import-file-input');
-    if (importBtn && importFile) {
-      var newImport = importBtn.cloneNode(true);
-      importBtn.parentNode.replaceChild(newImport, importBtn);
-      var newFile = importFile.cloneNode(true);
-      importFile.parentNode.replaceChild(newFile, importFile);
-
-      newImport.addEventListener('click', function () { newFile.click(); });
-      newFile.addEventListener('change', function () {
-        if (!this.files || !this.files[0]) return;
-        var reader = new FileReader();
-        reader.onload = function (e) {
-          var success = StateManager.importData(e.target.result);
-          if (success) {
-            showToast('数据导入成功，页面即将刷新');
-            setTimeout(function () { location.reload(); }, 1500);
-          } else {
-            showToast('数据导入失败，请检查文件格式');
-          }
-        };
-        reader.readAsText(this.files[0]);
-      });
-    }
-  }
-
-  function renderAboutInfo() {
-    var aboutEl = $('#profile-about');
-    if (!aboutEl) return;
-    aboutEl.innerHTML =
-      '<div class="about-section">' +
-        '<h3>关于</h3>' +
-        '<p>快乐学历史 v1.0</p>' +
-        '<p>让历史学习变得有趣！通过自适应难度、语音交互和段位系统，每天进步一点点。</p>' +
-        '<p class="about-copy">© 2024 Happy History</p>' +
-      '</div>';
-  }
-
-  // ==================== 初始化 ====================
-
-  function init() {
-    console.log('[App] Initializing...');
-
-    // 加载题库
-    QuizEngine.loadQuizData()
-      .then(function () {
-        console.log('[App] Quiz data loaded.');
-      })
-      .catch(function (err) {
-        console.error('[App] Failed to load quiz data:', err);
-        showToast('题库加载失败，请检查网络后刷新');
-      });
-
-    // 初始化语音引擎
-    VoiceEngine.init();
-    _state.voiceSupported = VoiceEngine.isSupported();
-
-    // 监听语音不支持事件
-    window.addEventListener('voiceEngine:unsupported', function () {
-      _state.voiceSupported = false;
-    });
-
-    // 初始化当日自适应状态
-    AdaptiveSystem.initDailyState();
-
-    // 绑定底部导航
-    bindNavigation();
-
-    // 渲染首页
-    renderHomePage();
-
-    console.log('[App] Initialization complete. Voice supported:', _state.voiceSupported);
-  }
-
-  // ==================== 暴露公共API ====================
-
-  window.App = {
-    switchPage: switchPage,
-    startRound: startRound,
-    getState: function () { return _state; }
-  };
-
-  // ==================== DOMContentLoaded 启动 ====================
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-
+  document.addEventListener('DOMContentLoaded', boot);
 })();

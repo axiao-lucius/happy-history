@@ -1,101 +1,90 @@
-# 🏯 快乐学历史 · Happy History
+# 🏯 快乐学历史 · Happy History v2.0
 
-> 国风水墨历史语音问答 PWA 小程序 | 577题 | GitHub Pages 免安装即用
+> 国风水墨风 · 五千年历史趣味问答 · 免安装 · 离线可用
+> **在线体验**：https://axiao-lucius.github.io/happy-history/
 
 ## ✨ 功能特色
 
-- **🎙️ 语音问答**：说出答案即可答题，支持语音读题和情感反馈
-- **📈 自适应难度**：从易到难智能递进，连续答对5题自动升级高难题比例
-- **👑 王者荣耀段位**：6级称号体系（不屈青铜→荣耀王者），段位揭晓动画
-- **🎨 国风水墨UI**：宣纸纹理、墨晕动效、朱砂红点缀，古典书卷气质
-- **📱 PWA离线可用**：添加到手机主屏幕，无需安装，断网也能答题
-- **📚 577道题库**：覆盖先秦到世界史，小学到高中全学段，按朝代×难度索引
-- **🔥 连胜系统**：连击特效、火焰图标、成就徽章解锁
-- **📖 错题本**：自动收集错题，随时复习巩固
+- **📚 828 道精选题库**：K12 教材主干 + 上下五千年重大事件 + 十大历史著作（含世界史名著）
+- **⚔️ 每轮 5 题满分 100**：20 分/题，答完立即揭晓段位
+- **👑 王者荣耀式段位**：不屈青铜 → 尊贵铂金 → 永恒钻石 → 至尊星耀 → 最强王者 → 荣耀王者，6 级荣誉
+- **🎨 国风水墨 UI**：宣纸纹理、朱砂印章、墨晕动效、粒子庆祝
+- **📱 完全离线可用**：Service Worker 预缓存全部题库和资源，飞行模式也能答题
+- **🔊 语音辅助**：桌面浏览器可开启朗读题目和语音作答（点击/文字为主交互）
+- **📖 错题本**：自动收集错题，一键复习巩固
+- **🔁 无限重开**：每轮 5 题完成后可立即再战
+- **🎯 自适应难度**：根据完成轮次动态调整题目难度分布
+- **⚙️ 完全免费**：GitHub Pages 托管，无需服务器，无需登录
 
-## 🚀 快速开始
+## 🚀 使用方法
 
-### 本地预览
-```bash
-cd happy-history
-python3 -m http.server 8080
-# 浏览器打开 http://localhost:8080
-```
+**方式一：直接访问**
+访问 https://axiao-lucius.github.io/happy-history/ 即可开始使用。
 
-### 部署到 GitHub Pages
-
-1. 在 GitHub 创建仓库 `happy-history`
-2. 推送代码：
-```bash
-cd happy-history
-git init
-git add .
-git commit -m "🏯 快乐学历史 v1.0"
-git remote add origin https://github.com/YOUR_USERNAME/happy-history.git
-git branch -M main
-git push -u origin main
-```
-3. 进入仓库 Settings → Pages → Source 选择 `main` 分支 `/ (root)` → Save
-4. 等待部署完成，访问 `https://YOUR_USERNAME.github.io/happy-history/`
+**方式二：添加到主屏幕（推荐）**
+- iOS Safari：分享 → 添加到主屏幕
+- Android Chrome：会自动弹提示，或菜单 → 安装应用
+- 添加后可像原生 App 一样使用，且完全离线
 
 ## 📁 项目结构
 
 ```
 happy-history/
-├── index.html                 # SPA入口页
-├── manifest.json              # PWA清单
-├── sw.js                      # Service Worker(离线缓存)
-├── css/
-│   └── main.css               # 国风水墨设计系统
-├── js/
-│   ├── app.js                 # 主应用控制器(路由+流程编排)
-│   ├── quizEngine.js          # 题库加载与索引引擎
-│   ├── adaptiveSystem.js      # 自适应难度递进算法
-│   ├── stateManager.js        # 状态持久化(错题本/成就/统计)
-│   ├── voiceEngine.js         # 语音识别与合成引擎
-│   ├── scoringSystem.js       # 计分与段位系统
-│   └── components/
-│       ├── QuizCard.js        # 答题卡片组件
-│       ├── RankReveal.js      # 段位揭晓动画
-│       └── StreakCounter.js   # 连胜计数器
-├── data/
-│   └── k12-history-quiz-v3.json  # 题库(577题, v5.1.0)
-└── assets/icons/
-    ├── icon-192.svg           # PWA图标
-    └── icon-512.svg
+├── index.html           # 单页应用入口
+├── manifest.json        # PWA 清单
+├── sw.js                # Service Worker v2（离线缓存）
+├── css/main.css         # 国风水墨设计系统
+├── js/app.js            # 主应用（Vanilla JS，零依赖）
+├── data/quiz-v4.json    # 828 题题库（K12 + 事件 + 著作）
+└── assets/icons/        # PWA 图标
 ```
-
-## 🎮 自适应难度机制
-
-| 累计连胜轮次 | 每轮高难题数 | 说明 |
-|-------------|------------|------|
-| 0 | 0 | 全部基础题(D1-D2) |
-| 1-2 | 1 | 首次达成5连对，插入1道D4-D5 |
-| 3-5 | 2 | 连续3次5连对，升至2道 |
-| 6-8 | 3 | 升至3道 |
-| 9+ | 4(封顶) | 最多4道高难，至少保留1道基础题 |
-
-每日首题固定为D1(最简单)，答错当前轮次连胜归零但历史轮次数保留。
 
 ## 👑 段位体系
 
-| 得分 | 称号 | 标识 |
-|------|------|------|
-| 100 | 荣耀王者·史学宗师 | 👑 |
-| 80 | 最强王者·博古通今 | ⭐ |
-| 60 | 至尊星耀·学有所成 | 💎 |
-| 40 | 永恒钻石·初窥门径 | 🔷 |
-| 20 | 尊贵铂金·再接再厉 | 🥉 |
-| 0 | 不屈青铜·从头再来 | 🛡️ |
+| 得分 | 称号 | 标识 | 金句 |
+|-----:|------|:---:|------|
+| 100 | 荣耀王者·史学宗师 | 👑 | 究天人之际，通古今之变 |
+| 80  | 最强王者·博古通今 | ⭐ | 腹有诗书气自华 |
+| 60  | 至尊星耀·学有所成 | 💎 | 学而不厌，诲人不倦 |
+| 40  | 永恒钻石·初窥门径 | 🔷 | 路漫漫其修远兮 |
+| 20  | 尊贵铂金·再接再厉 | 🥉 | 千里之行，始于足下 |
+| 0   | 不屈青铜·从头再来 | 🛡️ | 失败乃成功之母 |
+
+## 🎯 题库覆盖
+
+- **K12 教材主干**（630 题）：先秦→近现代按学段划分，小学 elementary / 初中 middle / 高中 high
+- **五千年重大事件**（98 题）：从三皇五帝到改革开放的百件里程碑事件
+- **十大历史著作**（100 题）：《史记》《资治通鉴》《左传》《汉书》《后汉书》《三国志》《春秋》《战国策》《二十四史》+ 世界史名著（希罗多德、修昔底德、汤因比、布罗代尔、黄仁宇等）
 
 ## 🛠️ 技术栈
 
-- **前端**: Vanilla JS + Web Components (零依赖)
-- **语音**: Web Speech API (STT + TTS)
-- **存储**: LocalStorage (纯前端，无需后端)
-- **部署**: GitHub Pages (静态托管)
-- **PWA**: Service Worker + manifest.json
+- **前端**：Vanilla JavaScript（零框架、零依赖，加载 <100KB）
+- **样式**：CSS 变量 + Grid + 硬件加速动画
+- **PWA**：Service Worker（预缓存 + Stale-While-Revalidate）+ Web App Manifest
+- **存储**：LocalStorage（用户数据、错题本、设置）
+- **语音**：Web Speech API（TTS 全端可用，STT 桌面 Chrome/Edge 可用）
+- **部署**：GitHub Pages（免费、静态托管）
+
+## 📱 兼容性
+
+| 平台 | 完整体验 | 语音识别 | 添加主屏幕 |
+|------|:-------:|:-------:|:--------:|
+| Android Chrome | ✅ | ✅ | ✅（自动提示）|
+| iOS Safari | ✅ | ❌ | ✅（手动分享）|
+| 桌面 Chrome/Edge | ✅ | ✅ | ✅ |
+| 桌面 Safari/Firefox | ✅ | ❌ | ➖ |
+
+语音识别不可用时，点击/文字作答体验完全一致。
+
+## 🔧 本地开发
+
+```bash
+git clone https://github.com/axiao-lucius/happy-history.git
+cd happy-history
+python3 -m http.server 8080
+# 浏览器打开 http://localhost:8080
+```
 
 ## 📝 License
 
-MIT
+MIT · 欢迎学习、二次开发。

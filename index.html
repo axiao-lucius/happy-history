@@ -1,167 +1,204 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="theme-color" content="#F5F0E8">
-  <meta name="description" content="Happy History — 趣味历史答题，品味千年风华">
-  <title>趣史 Happy History</title>
-
-  <!-- Google Fonts: Noto Serif SC -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
-
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="manifest.json">
-
-  <!-- Design System -->
-  <link rel="stylesheet" href="css/main.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#8B4513">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="快乐学历史">
+<meta name="description" content="快乐学历史 · 国风水墨历史问答 · 五千年上下 · 免安装即用">
+<title>快乐学历史 · 趣味答题</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.svg">
+<link rel="icon" type="image/svg+xml" href="assets/icons/icon-192.svg">
+<link rel="stylesheet" href="css/main.css?v=2">
 </head>
 <body>
 
-  <!-- ===== Header ===== -->
-  <header class="app-header">
-    <div class="logo">📜</div>
-    <h1>趣史 · Happy History</h1>
-  </header>
+<div class="paper-bg" aria-hidden="true"></div>
+<div class="ink-splash" aria-hidden="true"></div>
 
-  <!-- ===== Main Content (Route Container) ===== -->
-  <main class="container">
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-icon">📜</span>
+      <span class="brand-text">快乐学历史</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="btnMenu" title="菜单" aria-label="菜单">☰</button>
+    </div>
+  </div>
+</header>
 
-    <!-- Home Page -->
-    <div data-page="home" class="active">
-      <div class="card mt-md">
-        <h2 class="card-title">今日一问</h2>
-        <p>「以铜为镜，可以正衣冠；以史为镜，可以知兴替。」</p>
-        <p class="text-center text-vermilion" style="font-size:var(--fs-sm);">—— 唐·李世民</p>
+<main class="scene" id="sceneHome" data-active="true">
+  <section class="hero">
+    <div class="hero-seal">趣</div>
+    <h1 class="hero-title">读史知兴替<br><span class="accent">趣答通古今</span></h1>
+    <p class="hero-sub">以铜为镜可正衣冠，以史为镜可知兴替</p>
+    <div class="hero-stats">
+      <div class="stat"><div class="stat-num" id="statTotal">828</div><div class="stat-label">题库总数</div></div>
+      <div class="stat"><div class="stat-num" id="statStreak">0</div><div class="stat-label">连胜纪录</div></div>
+      <div class="stat"><div class="stat-num" id="statRounds">0</div><div class="stat-label">已完成轮数</div></div>
+    </div>
+    <button class="btn-primary btn-hero" id="btnStart">
+      <span class="btn-inner">开 始 答 题</span>
+      <span class="btn-hint">每轮 5 题 · 满分 100</span>
+    </button>
+    <div class="hero-tip" id="offlineBadge" hidden>📴 离线模式 · 依然可以答题</div>
+  </section>
+
+  <section class="card rank-preview">
+    <div class="card-title">
+      <span class="title-cn">段位一览</span>
+      <span class="title-en">HONORS</span>
+    </div>
+    <div class="rank-grid" id="rankGrid"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-title"><span class="title-cn">题海泛舟</span><span class="title-en">CATEGORIES</span></div>
+    <div class="chip-row" id="categoryChips"></div>
+  </section>
+
+  <section class="card" id="recentSection" hidden>
+    <div class="card-title"><span class="title-cn">最近战绩</span><span class="title-en">RECENT</span></div>
+    <ul class="recent-list" id="recentList"></ul>
+  </section>
+</main>
+
+<main class="scene" id="sceneQuiz" data-active="false" aria-hidden="true">
+  <div class="quiz-header">
+    <div class="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-info">
+        <span id="progressText">第 1 / 5 题</span>
+        <span class="score-badge" id="scoreBadge">已得 0 分</span>
       </div>
+    </div>
+    <button class="icon-btn ghost" id="btnQuit" title="退出" aria-label="退出">✕</button>
+  </div>
 
-      <div class="card">
-        <h2 class="card-title">快速开始</h2>
-        <p>选择朝代，开启你的历史之旅。</p>
-        <button id="btn-start-challenge" class="btn btn-primary btn-block mt-md">开始答题 🖊️</button>
+  <div class="quiz-body">
+    <div class="q-meta">
+      <span class="tag" id="qDynasty">先秦</span>
+      <span class="tag ghost" id="qDifficulty">难度 ★</span>
+      <span class="tag ghost" id="qCategory">教材</span>
+    </div>
+
+    <div class="question-card" id="questionCard">
+      <div class="q-index">第 <span id="qIndex">1</span> 题</div>
+      <div class="q-text" id="qText">加载中…</div>
+      <div class="q-voice">
+        <button class="voice-btn" id="btnSpeak" title="朗读题目">🔊 朗读</button>
+        <button class="voice-btn" id="btnMic" title="语音作答" hidden>🎙 语音作答</button>
       </div>
+    </div>
 
-      <div class="card">
-        <h2 class="card-title">我的成就</h2>
-        <div class="stat-grid">
-          <div><div class="stat-value">--</div><div class="stat-label">总答题</div></div>
-          <div><div class="stat-value">--</div><div class="stat-label">正确率</div></div>
-          <div><div class="stat-value">--</div><div class="stat-label">最高连击</div></div>
+    <div class="options" id="options"></div>
+
+    <div class="feedback" id="feedback" hidden>
+      <div class="feedback-head">
+        <span class="feedback-icon" id="fbIcon">✔</span>
+        <span class="feedback-title" id="fbTitle">妙哉！</span>
+      </div>
+      <div class="feedback-body" id="fbBody">解析…</div>
+      <button class="btn-primary btn-next" id="btnNext">下一题 →</button>
+    </div>
+  </div>
+</main>
+
+<main class="scene" id="sceneResult" data-active="false" aria-hidden="true">
+  <div class="result-stage">
+    <canvas id="particleCanvas" class="particles"></canvas>
+
+    <div class="rank-reveal" id="rankReveal">
+      <div class="rank-emblem" id="rankEmblem">🏆</div>
+      <div class="rank-title" id="rankTitle">荣耀王者</div>
+      <div class="rank-subtitle" id="rankSubtitle">史学宗师</div>
+      <div class="rank-score"><span id="rankScoreNum">100</span> 分</div>
+      <div class="rank-quote" id="rankQuote">"以史为镜，可知兴替"</div>
+    </div>
+
+    <div class="review card">
+      <div class="card-title"><span class="title-cn">答题回顾</span></div>
+      <ul class="review-list" id="reviewList"></ul>
+    </div>
+
+    <div class="result-actions">
+      <button class="btn-primary" id="btnAgain">再战一轮 ⚔</button>
+      <button class="btn-ghost" id="btnBackHome">返回首页</button>
+    </div>
+  </div>
+</main>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-mask" id="drawerMask"></div>
+  <div class="drawer-panel">
+    <div class="drawer-head">
+      <div class="drawer-title">📖 学史图鉴</div>
+      <button class="icon-btn ghost" id="btnCloseDrawer" aria-label="关闭">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <section class="drawer-section">
+        <h3 class="drawer-h3">我的印章</h3>
+        <div class="my-rank card-inset">
+          <div class="my-rank-emblem" id="myRankEmblem">🥉</div>
+          <div class="my-rank-info">
+            <div class="my-rank-title" id="myRankTitle">不屈青铜</div>
+            <div class="my-rank-desc">最高得分 <span id="myBestScore">0</span> · 共 <span id="myRounds">0</span> 轮</div>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- Quiz Page -->
-    <div data-page="quiz">
-      <div class="card mt-md">
-        <div class="quiz-progress"><div class="quiz-progress-bar" style="width:0%"></div></div>
-        <div class="quiz-question">题目加载中…</div>
-        <div class="quiz-options">
-          <div class="quiz-option">A. 选项一</div>
-          <div class="quiz-option">B. 选项二</div>
-          <div class="quiz-option">C. 选项三</div>
-          <div class="quiz-option">D. 选项四</div>
+      <section class="drawer-section">
+        <h3 class="drawer-h3">错题本</h3>
+        <div class="wrong-summary card-inset">
+          <span>共收录 <b id="wrongCount">0</b> 道错题</span>
+          <button class="btn-mini" id="btnReviewWrong">复习错题</button>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- Rank Page -->
-    <div data-page="rank">
-      <div class="card mt-md text-center">
-        <div class="rank-badge">🏅</div>
-        <h2>当前段位</h2>
-        <p class="text-gold" style="font-size:var(--fs-lg);font-weight:700;">童生</p>
-        <p style="font-size:var(--fs-sm);color:rgba(44,44,44,0.5);">再答对 30 题晋升秀才</p>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">段位一览</h2>
-        <ul class="rank-list">
-          <li class="rank-item"><span>🥉 童生</span><span class="text-gold">0 – 99</span></li>
-          <li class="rank-item"><span>🥈 秀才</span><span class="text-gold">100 – 299</span></li>
-          <li class="rank-item"><span>🥇 举人</span><span class="text-gold">300 – 599</span></li>
-          <li class="rank-item"><span>🎖️ 进士</span><span class="text-gold">600 – 999</span></li>
-          <li class="rank-item"><span>👑 状元</span><span class="text-gold">1000+</span></li>
-        </ul>
-      </div>
-    </div>
-
-    <!-- Profile Page -->
-    <div data-page="profile">
-      <div class="card mt-md text-center">
-        <div class="profile-avatar" style="background:var(--color-border);display:flex;align-items:center;justify-content:center;font-size:2rem;">🧑‍🎓</div>
-        <h2>书卷少年</h2>
-        <p class="text-indigo" style="font-size:var(--fs-sm);">童生 · 积分 42</p>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">学习统计</h2>
-        <div class="stat-grid">
-          <div><div class="stat-value">7</div><div class="stat-label">连续天数</div></div>
-          <div><div class="stat-value">128</div><div class="stat-label">已答题数</div></div>
-          <div><div class="stat-value">82%</div><div class="stat-label">正确率</div></div>
+      <section class="drawer-section">
+        <h3 class="drawer-h3">设置</h3>
+        <div class="settings-list">
+          <label class="setting-row">
+            <span>🔊 音效</span>
+            <input type="checkbox" id="setSound" checked>
+          </label>
+          <label class="setting-row">
+            <span>🗣 自动朗读题目</span>
+            <input type="checkbox" id="setAutoRead">
+          </label>
+          <label class="setting-row">
+            <span>🎙 显示语音作答</span>
+            <input type="checkbox" id="setVoice">
+          </label>
+          <button class="btn-ghost" id="btnResetAll">清空所有数据</button>
         </div>
-      </div>
+      </section>
 
-      <div class="card">
-        <h2 class="card-title">设置</h2>
-        <div class="quiz-option">🔔 每日提醒</div>
-        <div class="quiz-option">🌙 深色模式（开发中）</div>
-        <div class="quiz-option">📤 分享成绩</div>
-      </div>
+      <section class="drawer-section drawer-foot">
+        <div class="foot-info">
+          <p>快乐学历史 · v2.0</p>
+          <p>828 题 · 上下五千年 · 十大著作 · K12 全学段</p>
+          <p><a href="https://github.com/axiao-lucius/happy-history" target="_blank" rel="noopener">GitHub</a></p>
+        </div>
+      </section>
     </div>
+  </div>
+</aside>
 
-  </main>
+<div class="toast" id="toast" hidden></div>
 
-  <!-- ===== Footer ===== -->
-  <footer class="app-footer">
-    <p>© 2024 趣史 Happy History · 以史为鉴，趣味无穷</p>
-  </footer>
-
-  <!-- ===== Bottom Navigation ===== -->
-  <nav class="bottom-nav">
-    <button class="nav-tab active" data-target="home">
-      <span class="nav-icon">🏠</span>
-      <span>首页</span>
-    </button>
-    <button class="nav-tab" data-target="quiz">
-      <span class="nav-icon">🖊️</span>
-      <span>答题</span>
-    </button>
-    <button class="nav-tab" data-target="rank">
-      <span class="nav-icon">🏅</span>
-      <span>段位</span>
-    </button>
-    <button class="nav-tab" data-target="profile">
-      <span class="nav-icon">👤</span>
-      <span>我的</span>
-    </button>
-  </nav>
-
-  <!-- ===== Core Modules (load order matters) ===== -->
-  <script src="js/quizEngine.js"></script>
-  <script src="js/adaptiveSystem.js"></script>
-  <script src="js/stateManager.js"></script>
-  <script src="js/voiceEngine.js"></script>
-  <script src="js/scoringSystem.js"></script>
-  <!-- UI Components -->
-  <script src="js/components/QuizCard.js"></script>
-  <script src="js/components/RankReveal.js"></script>
-  <script src="js/components/StreakCounter.js"></script>
-  <!-- App Entry -->
-  <script src="js/app.js"></script>
-  
-  <!-- PWA Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('SW registered:', reg.scope))
-          .catch(err => console.warn('SW registration failed:', err));
-      });
-    }
-  </script>
+<script src="js/app.js?v=2"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js?v=2').catch(err => console.warn('SW register failed:', err));
+  });
+}
+</script>
 </body>
 </html>
